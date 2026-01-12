@@ -297,17 +297,134 @@ RGB_Cluster* gen_rand_centers(const RGB_Image* img, const int k) {
 	return(cluster);
 }
 
+
+//Get the squared distance between a pixel and a cluster center
+double calculateSquaredDistance(const RGB_Pixel& p, const RGB_Cluster& c) {
+	double red_diff = p.red - c.center.red;
+	double green_diff = p.green - c.center.green;
+	double blue_diff = p.blue - c.center.blue;
+	return red_diff * red_diff + green_diff * green_diff + blue_diff * blue_diff;
+}
+//A function to make the addition of a cluster to a pixel easier
+void AddToClusterCenter(const RGB_Pixel& p,RGB_Cluster& cluster) {
+	cluster.center.red += p.red;
+	cluster.center.green += p.green;
+	cluster.center.blue += p.blue;
+}
 /*
    For application of the batchk k-means algorithm to color quantization, see
    M. E. Celebi, Improving the Performance of K-Means for Color Quantization,
    Image and Vision Computing, vol. 29, no. 4, pp. 260-271, 2011.
  */
  /* Color quantization using the batch k-means algorithm */
+
+// I have copied my k-means implementation here and have modified it to work with RGB images
 void batch_kmeans(const RGB_Image* img, const int num_colors,
 	const int max_iters, RGB_Cluster* clusters)
 {
-	cerr << "Batch Means Not Implemented Yet";
-	return;
+	const int sizeOfInstance = 3; // RGB has 3 dimensions
+	const double conversionThreshold = 0.001; // Convergence threshold
+
+	double oldSSE = 0;
+	//data for the loop | Initialize here to save on memory allocation
+	//i is the iteration we are on
+	for (int i = 1; i <= max_iters; i++) {
+		double SSE = 0.0;
+		//generate new clusters by taking the average of the seperated data points
+		//reset the newClusters list
+		//Reset an array to hold the calculated squared distances
+		RGB_Cluster* newClusterCenters = new RGB_Cluster[num_colors];
+		//Initialize the new cluster centers
+		for(int h = 0; h < num_colors; h++) {
+			newClusterCenters[h].center.red = 0.0;
+			newClusterCenters[h].center.green = 0.0;
+			newClusterCenters[h].center.blue = 0.0;
+			newClusterCenters[h].size = 0;
+		}
+		//An Iteration
+		for (int j = 0; j < img->size; j++) {
+			//Find which cluster is closer, initializing with the first cluster distance
+			int closest = 0;
+			// -1 means that there is no closest distance yet
+			double closestDist = -1;
+
+			// // Loop through all clusters to find the closest
+			for (int h = 0; h < num_colors; h++) {  // Start from 1 since 0 is already checked
+				double dist = calculateSquaredDistance(img->data[j], clusters[h]);
+				//store the distances
+				if (dist < closestDist || closestDist == -1) {
+					closestDist = dist;  // Update closest distance
+					closest = h;         // Update closest cluster index
+				}
+
+			}
+
+			// Calculate the SSE
+			SSE += closestDist;
+
+			//generate new clusters
+			//add the data to the cluster
+			for (int k = 0; k < sizeOfInstance; k++) {
+				AddToClusterCenter(img->data[j], newClusterCenters[closest]);
+			}
+
+			//update the number of data points for this cluster
+			newClusterCenters[closest].size += 1;
+		}
+
+
+
+
+		//check if the convergenceThreshold is reached and kill the run if so
+		if (oldSSE != 0 && (oldSSE - SSE) / oldSSE < conversionThreshold) {
+			//save the iterations and Final SSE
+			cout << "Converged in iteration: " << i << " with SSE: " << SSE << endl;
+			break;
+		}
+		oldSSE = SSE;
+
+
+		//once all of the data has been added together find the centroid for each cluster
+		//Also handle singleton clusters
+		for (int i = 0; i < num_colors; i++) {
+			if (newClusterCenters[i].size != 1) {
+				//is not a singleton cluster
+				if (newClusterCenters[i].size > 0) {
+					newClusterCenters[i].center.blue /= newClusterCenters[i].size;
+					newClusterCenters[i].center.green /= newClusterCenters[i].size;
+					newClusterCenters[i].center.red /= newClusterCenters[i].size;
+				}
+				
+				
+			}
+			else {
+				//Is a singleton cluster
+				// Find the point contributing most to the SSE
+				int maxErrorPointIndex = -1;
+				double maxError = -1;
+				for (int j = 0; j < img->size; j++) {
+					double dist = calculateSquaredDistance(img->data[j], newClusterCenters[i]);
+					if (dist > maxError) {
+						maxError = dist;
+						maxErrorPointIndex = j;
+					}
+				}
+				// Reassign the cluster center to this point
+				if (maxErrorPointIndex != -1) {
+					//create a new instance of this location
+					RGB_Pixel maxErrorPoint = img->data[maxErrorPointIndex];
+					
+					//assign clusters to its new point
+					newClusterCenters[i].center = maxErrorPoint;
+				}
+			}
+		}
+		//remove the old cluster
+		delete[] clusters;
+		//save the new clusters as the old
+		clusters = newClusterCenters;
+	}
+	cout << "Reached maximum iterations: " << max_iters << " with SSE: " << oldSSE << endl;
 }
 
 void free_img(const RGB_Image* img) {
@@ -325,10 +442,6 @@ int main(int argc, char* argv[])
 	RGB_Image* img;
 	RGB_Image* out_img;
 	RGB_Cluster* cluster;
-
-	std::cout << "argc = " << argc << "\n";
-	for (int i = 0; i < argc; i++)
-		std::cout << "argv[" << i << "] = " << argv[i] << "\n";
 
 	if (argc == 3) {
 		/* Image filename */
@@ -374,5 +487,9 @@ int main(int argc, char* argv[])
 
 	free(cluster);
 
+
+	//Write the new file
+	const char* outputFilename = "output.ppm";
+	//write_PPM(img, outputFilename);
 	return 0;
 }
