@@ -284,9 +284,7 @@ RGB_Cluster* gen_rand_centers(const RGB_Image* img, const int k) {
 		/* Make the initial guesses for the centers, m1, m2, ..., mk */
 		rand_pixel = img->data[bounded_rand(img->size)];
 
-		cluster[i].center.red = rand_pixel.red;
-		cluster[i].center.green = rand_pixel.green;
-		cluster[i].center.blue = rand_pixel.blue;
+		cluster[i].center = rand_pixel;
 
 		/* Set the number of points assigned to k cluster to zero, n1, n2, ..., nk */
 		cluster[i].size = 0;
@@ -311,6 +309,25 @@ void AddToClusterCenter(const RGB_Pixel& p,RGB_Cluster& cluster) {
 	cluster.center.green += p.green;
 	cluster.center.blue += p.blue;
 }
+//Recolors the image to match the clusters
+void RecolorImage(const RGB_Image* src, RGB_Image* dst, RGB_Cluster* clusters, const int num_colors) {
+	for (int i = 0; i < src->size; i++) {
+		int closest = 0;
+
+		double closestDist = calculateSquaredDistance(src->data[i], clusters[0]);
+
+		for (int c = 1; c < num_colors; c++) {
+			double dist = calculateSquaredDistance(src->data[i], clusters[c]);
+			if (dist < closestDist) {
+				closestDist = dist;
+				closest = c;
+			}
+		}
+
+		// Assign the pixel to the cluster center color
+		dst->data[i] = clusters[closest].center;
+	}
+}
 /*
    For application of the batchk k-means algorithm to color quantization, see
    M. E. Celebi, Improving the Performance of K-Means for Color Quantization,
@@ -319,14 +336,17 @@ void AddToClusterCenter(const RGB_Pixel& p,RGB_Cluster& cluster) {
  /* Color quantization using the batch k-means algorithm */
 
 // I have copied my k-means implementation here and have modified it to work with RGB images
-void batch_kmeans(const RGB_Image* img, const int num_colors,
+RGB_Image* batch_kmeans(const RGB_Image* img, const int num_colors,
 	const int max_iters, RGB_Cluster* clusters)
 {
 	const int sizeOfInstance = 3; // RGB has 3 dimensions
 	const double conversionThreshold = 0.001; // Convergence threshold
 
 	double oldSSE = 0;
-	//data for the loop | Initialize here to save on memory allocation
+
+	
+	//We will use Recolor Image later to assign the colors to the new image
+
 	//i is the iteration we are on
 	for (int i = 1; i <= max_iters; i++) {
 		double SSE = 0.0;
@@ -346,13 +366,13 @@ void batch_kmeans(const RGB_Image* img, const int num_colors,
 			//Find which cluster is closer, initializing with the first cluster distance
 			int closest = 0;
 			// -1 means that there is no closest distance yet
-			double closestDist = -1;
+			double closestDist = DBL_MAX;
 
 			// // Loop through all clusters to find the closest
 			for (int h = 0; h < num_colors; h++) {  // Start from 1 since 0 is already checked
 				double dist = calculateSquaredDistance(img->data[j], clusters[h]);
 				//store the distances
-				if (dist < closestDist || closestDist == -1) {
+				if (dist < closestDist) {
 					closestDist = dist;  // Update closest distance
 					closest = h;         // Update closest cluster index
 				}
@@ -364,9 +384,8 @@ void batch_kmeans(const RGB_Image* img, const int num_colors,
 
 			//generate new clusters
 			//add the data to the cluster
-			for (int k = 0; k < sizeOfInstance; k++) {
-				AddToClusterCenter(img->data[j], newClusterCenters[closest]);
-			}
+			AddToClusterCenter(img->data[j], newClusterCenters[closest]);
+			
 
 			//update the number of data points for this cluster
 			newClusterCenters[closest].size += 1;
@@ -419,12 +438,20 @@ void batch_kmeans(const RGB_Image* img, const int num_colors,
 				}
 			}
 		}
-		//remove the old cluster
-		delete[] clusters;
 		//save the new clusters as the old
 		clusters = newClusterCenters;
 	}
+	
 	cout << "Reached maximum iterations: " << max_iters << " with SSE: " << oldSSE << endl;
+	//Deep copy the image to output
+	RGB_Image* out_img = new RGB_Image;
+	out_img->width = img->width;
+	out_img->height = img->height;
+	out_img->size = img->size;
+	out_img->data = new RGB_Pixel[out_img->size];
+	//Now recolor the image based on the new clusters
+	RecolorImage(img, out_img, clusters, num_colors);
+	return out_img;
 }
 
 void free_img(const RGB_Image* img) {
@@ -477,7 +504,7 @@ int main(int argc, char* argv[])
 	cluster = gen_rand_centers(img, k);
 
 	/* Execute Batch K-means*/
-	batch_kmeans(img, k, INT_MAX, cluster);
+	RGB_Image* cluster_img = batch_kmeans(img, k, INT_MAX, cluster);
 
 	/* Stop Timer*/
 	auto stop = std::chrono::high_resolution_clock::now();
@@ -490,6 +517,9 @@ int main(int argc, char* argv[])
 
 	//Write the new file
 	const char* outputFilename = "output.ppm";
-	//write_PPM(img, outputFilename);
+	write_PPM(cluster_img, outputFilename);
+
+	free_img(img);
+	free_img(cluster_img);
 	return 0;
 }
