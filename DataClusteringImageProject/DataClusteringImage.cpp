@@ -514,7 +514,7 @@ int main(int argc, char* argv[])
 
 	free(cluster);
 
-
+	printf("Execution Time (ms): %lld\n", elapsed.count());
 	//Write the new file
 	const char* outputFilename = "output.ppm";
 	write_PPM(cluster_img, outputFilename);
