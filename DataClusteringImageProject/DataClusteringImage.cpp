@@ -433,7 +433,7 @@ RGB_Image* batch_kmeans(const RGB_Image* img, const int batch_size, const int nu
 				// Find the point contributing most to the SSE
 				int maxErrorPointIndex = -1;
 				double maxError = -1;
-				for (int j = 0; j < img->size; j++) {
+				for (int j = 0; j < batch.size(); j++) {
 					double dist = calculateSquaredDistance(batch[j], newClusterCenters[i]);
 					if (dist > maxError) {
 						maxError = dist;
