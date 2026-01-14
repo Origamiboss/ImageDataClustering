@@ -529,7 +529,7 @@ int main(int argc, char* argv[])
 	auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(stop - start);
 
 	free(cluster);
-
+	printf("Execution Time (ms): %lld\n", elapsed.count());
 
 	//Write the new file
 	const char* outputFilename = "output.ppm";
