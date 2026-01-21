@@ -9,7 +9,6 @@
 #include <cstdlib>
 #include <time.h>
 #include <float.h>
-#include <vector>
 
 using namespace std;
 
@@ -296,38 +295,31 @@ RGB_Cluster* gen_rand_centers(const RGB_Image* img, const int k) {
 	return(cluster);
 }
 
-vector<RGB_Pixel> get_rand_batch(const RGB_Image* img, const int batch_size) {
-	vector<RGB_Pixel> batch;
-	batch.reserve(batch_size);
+RGB_Pixel* get_rand_batch(const RGB_Image* img, const int batch_size) {
+	RGB_Pixel* batch = new RGB_Pixel[batch_size];
 	for (int i = 0; i < batch_size; i++) {
 		RGB_Pixel rand_pixel = img->data[bounded_rand(img->size)];
-		batch.push_back(rand_pixel);
+		batch[i] = rand_pixel;
 	}
 	return batch;
 }
 
-//Get the squared distance between a pixel and a cluster center
-double calculateSquaredDistance(const RGB_Pixel& p, const RGB_Cluster& c) {
-	double red_diff = p.red - c.center.red;
-	double green_diff = p.green - c.center.green;
-	double blue_diff = p.blue - c.center.blue;
-	return red_diff * red_diff + green_diff * green_diff + blue_diff * blue_diff;
-}
-//A function to make the addition of a cluster to a pixel easier
-void AddToClusterCenter(const RGB_Pixel& p,RGB_Cluster& cluster) {
-	cluster.center.red += p.red;
-	cluster.center.green += p.green;
-	cluster.center.blue += p.blue;
-}
+
 //Recolors the image to match the clusters
 void RecolorImage(const RGB_Image* src, RGB_Image* dst, RGB_Cluster* clusters, const int num_colors) {
 	for (int i = 0; i < src->size; i++) {
 		int closest = 0;
 
-		double closestDist = calculateSquaredDistance(src->data[i], clusters[0]);
+		// Find the closest cluster center
+		// Initialize with the max distance
+		double closestDist = DBL_MAX;
 
 		for (int c = 1; c < num_colors; c++) {
-			double dist = calculateSquaredDistance(src->data[i], clusters[c]);
+			//Get the squared distance
+			double red_diff = src->data[i].red - clusters[c].center.red;
+			double green_diff = src->data[i].green - clusters[c].center.green;
+			double blue_diff = src->data[i].blue - clusters[c].center.blue;
+			double dist = red_diff * red_diff + green_diff * green_diff + blue_diff * blue_diff;
 			if (dist < closestDist) {
 				closestDist = dist;
 				closest = c;
@@ -346,7 +338,7 @@ void RecolorImage(const RGB_Image* src, RGB_Image* dst, RGB_Cluster* clusters, c
  /* Color quantization using the batch k-means algorithm */
 
 // I have copied my k-means implementation here and have modified it to work with RGB images
-RGB_Image* batch_kmeans(const RGB_Image* img, const int batch_size, const int num_colors,
+RGB_Image* batch_kmeans(const RGB_Image* img, const int num_colors,
 	const int max_iters, RGB_Cluster* clusters)
 {
 	const int sizeOfInstance = 3; // RGB has 3 dimensions
@@ -360,8 +352,6 @@ RGB_Image* batch_kmeans(const RGB_Image* img, const int batch_size, const int nu
 	//i is the iteration we are on
 	for (int i = 1; i <= max_iters; i++) {
 		double SSE = 0.0;
-		//generate new clusters by taking the average of the seperated data points
-		//reset the newClusters list
 		//Reset an array to hold the calculated squared distances
 		RGB_Cluster* newClusterCenters = new RGB_Cluster[num_colors];
 		//Initialize the new cluster centers
@@ -372,17 +362,21 @@ RGB_Image* batch_kmeans(const RGB_Image* img, const int batch_size, const int nu
 			newClusterCenters[h].size = 0;
 		}
 		//Create a new Image object to hold the batch data
-		vector<RGB_Pixel> batch = get_rand_batch(img, batch_size);
+		//RGB_Pixel* batch = get_rand_batch(img, batch_size);
+		
 		//An Iteration
-		for (int j = 0; j < batch.size(); j++) {
+		for (int j = 0; j < img->size; j++) {
 			//Find which cluster is closer, initializing with the first cluster distance
 			int closest = 0;
-			// -1 means that there is no closest distance yet
 			double closestDist = DBL_MAX;
 
 			// // Loop through all clusters to find the closest
 			for (int h = 0; h < num_colors; h++) {  // Start from 1 since 0 is already checked
-				double dist = calculateSquaredDistance(batch[j], clusters[h]);
+				//Get the squared distance
+				double red_diff = img->data[j].red - clusters[h].center.red;
+				double green_diff = img->data[j].green - clusters[h].center.green;
+				double blue_diff = img->data[j].blue - clusters[h].center.blue;
+				double dist = red_diff * red_diff + green_diff * green_diff + blue_diff * blue_diff;
 				//store the distances
 				if (dist < closestDist) {
 					closestDist = dist;  // Update closest distance
@@ -396,8 +390,9 @@ RGB_Image* batch_kmeans(const RGB_Image* img, const int batch_size, const int nu
 
 			//generate new clusters
 			//add the data to the cluster
-			AddToClusterCenter(batch[j], newClusterCenters[closest]);
-			
+			newClusterCenters[closest].center.red += img->data[j].red;
+			newClusterCenters[closest].center.green += img->data[j].green;
+			newClusterCenters[closest].center.blue += img->data[j].blue;
 
 			//update the number of data points for this cluster
 			newClusterCenters[closest].size += 1;
@@ -407,47 +402,24 @@ RGB_Image* batch_kmeans(const RGB_Image* img, const int batch_size, const int nu
 
 
 		//check if the convergenceThreshold is reached and kill the run if so
-		if (oldSSE != 0 && (oldSSE - SSE) / oldSSE < conversionThreshold) {
+		//Commented out the SSE termination condition
+		/*if (oldSSE != 0 && (oldSSE - SSE) / oldSSE < conversionThreshold) {
 			//save the iterations and Final SSE
 			std::cout << "Converged in iteration: " << i << " with SSE: " << SSE << endl;
 			break;
-		}
+		}*/
+
+		//set the old SSE to the current SSE for the next iteration
 		oldSSE = SSE;
+		cout << "Iteration: " << i << " SSE: " << SSE << endl;
 
-
-		//once all of the data has been added together find the centroid for each cluster
+		//once all of the data has been added together find the centroid for each cluster get the average
 		//Also handle singleton clusters
 		for (int i = 0; i < num_colors; i++) {
-			if (newClusterCenters[i].size != 1) {
-				//is not a singleton cluster
-				if (newClusterCenters[i].size > 0) {
-					newClusterCenters[i].center.blue /= newClusterCenters[i].size;
-					newClusterCenters[i].center.green /= newClusterCenters[i].size;
-					newClusterCenters[i].center.red /= newClusterCenters[i].size;
-				}
-				
-				
-			}
-			else {
-				//Is a singleton cluster
-				// Find the point contributing most to the SSE
-				int maxErrorPointIndex = -1;
-				double maxError = -1;
-				for (int j = 0; j < batch.size(); j++) {
-					double dist = calculateSquaredDistance(batch[j], newClusterCenters[i]);
-					if (dist > maxError) {
-						maxError = dist;
-						maxErrorPointIndex = j;
-					}
-				}
-				// Reassign the cluster center to this point
-				if (maxErrorPointIndex != -1) {
-					//create a new instance of this location
-					RGB_Pixel maxErrorPoint = batch[maxErrorPointIndex];
-					
-					//assign clusters to its new point
-					newClusterCenters[i].center = maxErrorPoint;
-				}
+			if (newClusterCenters[i].size > 0) {
+				newClusterCenters[i].center.blue /= newClusterCenters[i].size;
+				newClusterCenters[i].center.green /= newClusterCenters[i].size;
+				newClusterCenters[i].center.red /= newClusterCenters[i].size;
 			}
 		}
 		//save the new clusters as the old
@@ -478,28 +450,30 @@ int main(int argc, char* argv[])
 {
 	char* filename;						/* Filename Pointer*/
 	int k;								/* Number of clusters*/
-	int batch_size;
+	//int batch_size;
 	RGB_Image* img;
 	RGB_Image* out_img;
 	RGB_Cluster* cluster;
 
-	if (argc == 4) {
+	if (argc == 3) {
 		/* Image filename */
 		filename = argv[1];
 
 		/* k, number of clusters */
 		k = atoi(argv[2]);
 
-		batch_size = atoi(argv[3]);
+		//batch_size = atoi(argv[3]);
 	}
-	else if (argc > 4) {
+	else if (argc > 3) {
 		printf("Too many arguments supplied.\n");
-		printf("DataClusteringImage.exe <file_name> <num_of_clusters> <batch_size>\n");
+		printf("DataClusteringImage.exe <file_name> <num_of_clusters>\n");
+		//printf("DataClusteringImage.exe <file_name> <num_of_clusters> <batch_size>\n");
 		return 0;
 	}
 	else {
 		printf("Two arguments expected: image filename and number of clusters.\n");
-		printf("DataClusteringImage.exe <file_name> <num_of_clusters> <batch_size>\n");
+		printf("DataClusteringImage.exe <file_name> <num_of_clusters>\n");
+		//printf("DataClusteringImage.exe <file_name> <num_of_clusters> <batch_size>\n");
 		printf("%d\n", argc);
 		return 0;
 	}
@@ -507,7 +481,7 @@ int main(int argc, char* argv[])
 	srand(time(NULL));
 
 	/* Print Args*/
-	printf("%s %d %d\n", filename, k, batch_size);
+	printf("%s %d\n", filename, k);
 
 	/* Read Image*/
 	img = read_PPM(filename);
@@ -520,7 +494,9 @@ int main(int argc, char* argv[])
 	cluster = gen_rand_centers(img, k);
 
 	/* Execute Batch K-means*/
-	RGB_Image* cluster_img = batch_kmeans(img, batch_size, k, INT_MAX, cluster);
+	//RGB_Image* cluster_img = batch_kmeans(img, batch_size, k, INT_MAX, cluster);
+	const int max_iters = 500;
+	RGB_Image* cluster_img = batch_kmeans(img, k, max_iters, cluster);
 
 	/* Stop Timer*/
 	auto stop = std::chrono::high_resolution_clock::now();
