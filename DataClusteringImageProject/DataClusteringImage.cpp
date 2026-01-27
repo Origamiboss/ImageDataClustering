@@ -296,23 +296,26 @@ RGB_Cluster* gen_rand_centers(const RGB_Image* img, const int k) {
 }
 
 RGB_Pixel* get_rand_batch(const RGB_Image* img, const int batch_size) {
-	RGB_Pixel* batch = new RGB_Pixel[batch_size];
+	// Allocate memory for batch
+	RGB_Pixel* batch = (RGB_Pixel*)malloc(sizeof(RGB_Pixel) * batch_size);
+
 	for (int i = 0; i < batch_size; i++) {
 		RGB_Pixel rand_pixel = img->data[bounded_rand(img->size)];
 		batch[i] = rand_pixel;
 	}
+
 	return batch;
 }
 
 
 //Recolors the image to match the clusters
 RGB_Image* map_pixels(const RGB_Image* src, RGB_Cluster* clusters, const int num_colors) {
-	RGB_Image* dst = new RGB_Image;
+	RGB_Image* dst = (RGB_Image*)malloc(sizeof(RGB_Image));
 	//Make my new image
 	dst->width = src->width;
 	dst->height = src->height;
 	dst->size = src->size;
-	dst->data = new RGB_Pixel[dst->size];
+	dst->data = (RGB_Pixel*)malloc(sizeof(RGB_Pixel) * dst->size);
 
 	for (int i = 0; i < src->size; i++) {
 		int closest = 0;
@@ -354,14 +357,15 @@ void batch_kmeans(const RGB_Image* img, const int num_colors,
 
 	double oldSSE = 0;
 
-	
-	//We will use Recolor Image later to assign the colors to the new image
+	//initialize new clusters
+	RGB_Cluster* newClusterCenters = (RGB_Cluster*)malloc(sizeof(RGB_Cluster) * num_colors);
+	//We will use Recolor Image later to assign the colors to the malloc image
 
 	//i is the iteration we are on
 	for (int i = 1; i <= max_iters; i++) {
 		double SSE = 0.0;
 		//Reset an array to hold the calculated squared distances
-		RGB_Cluster* newClusterCenters = new RGB_Cluster[num_colors];
+		
 		//Initialize the new cluster centers
 		for(int h = 0; h < num_colors; h++) {
 			newClusterCenters[h].center.red = 0.0;
@@ -414,6 +418,7 @@ void batch_kmeans(const RGB_Image* img, const int num_colors,
 		/*if (oldSSE != 0 && (oldSSE - SSE) / oldSSE < conversionThreshold) {
 			//save the iterations and Final SSE
 			std::cout << "Converged in iteration: " << i << " with SSE: " << SSE << endl;
+			free(newClusterCenters);
 			break;
 		}*/
 
@@ -433,7 +438,7 @@ void batch_kmeans(const RGB_Image* img, const int num_colors,
 		//save the new clusters as the old
 		clusters = newClusterCenters;
 	}
-	
+	free(newClusterCenters);
 	std::cout << "Reached maximum iterations: " << max_iters << " with SSE: " << oldSSE << endl;
 	
 }
