@@ -306,7 +306,7 @@ RGB_Pixel* get_rand_batch(const RGB_Image* img, const int batch_size) {
 
 
 //Recolors the image to match the clusters
-void RecolorImage(const RGB_Image* src, RGB_Image* dst, RGB_Cluster* clusters, const int num_colors) {
+void map_pixels(const RGB_Image* src, RGB_Image* dst, RGB_Cluster* clusters, const int num_colors) {
 	for (int i = 0; i < src->size; i++) {
 		int closest = 0;
 
@@ -338,7 +338,7 @@ void RecolorImage(const RGB_Image* src, RGB_Image* dst, RGB_Cluster* clusters, c
  /* Color quantization using the batch k-means algorithm */
 
 // I have copied my k-means implementation here and have modified it to work with RGB images
-RGB_Image* batch_kmeans(const RGB_Image* img, const int num_colors,
+void batch_kmeans(const RGB_Image* img, const int num_colors,
 	const int max_iters, RGB_Cluster* clusters)
 {
 	const int sizeOfInstance = 3; // RGB has 3 dimensions
@@ -427,15 +427,7 @@ RGB_Image* batch_kmeans(const RGB_Image* img, const int num_colors,
 	}
 	
 	std::cout << "Reached maximum iterations: " << max_iters << " with SSE: " << oldSSE << endl;
-	//Deep copy the image to output
-	RGB_Image* out_img = new RGB_Image;
-	out_img->width = img->width;
-	out_img->height = img->height;
-	out_img->size = img->size;
-	out_img->data = new RGB_Pixel[out_img->size];
-	//Now recolor the image based on the new clusters
-	RecolorImage(img, out_img, clusters, num_colors);
-	return out_img;
+	
 }
 
 void free_img(const RGB_Image* img) {
@@ -496,7 +488,16 @@ int main(int argc, char* argv[])
 	/* Execute Batch K-means*/
 	//RGB_Image* cluster_img = batch_kmeans(img, batch_size, k, INT_MAX, cluster);
 	const int max_iters = 500;
-	RGB_Image* cluster_img = batch_kmeans(img, k, max_iters, cluster);
+	batch_kmeans(img, k, max_iters, cluster);
+
+	//Deep copy the image to output
+	RGB_Image* cluster_img = new RGB_Image;
+	cluster_img->width = img->width;
+	cluster_img->height = img->height;
+	cluster_img->size = img->size;
+	cluster_img->data = new RGB_Pixel[cluster_img->size];
+	//Now recolor the image based on the new clusters
+	map_pixels(img, cluster_img, cluster, k);
 
 	/* Stop Timer*/
 	auto stop = std::chrono::high_resolution_clock::now();
