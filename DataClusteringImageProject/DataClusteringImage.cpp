@@ -306,7 +306,14 @@ RGB_Pixel* get_rand_batch(const RGB_Image* img, const int batch_size) {
 
 
 //Recolors the image to match the clusters
-void map_pixels(const RGB_Image* src, RGB_Image* dst, RGB_Cluster* clusters, const int num_colors) {
+RGB_Image* map_pixels(const RGB_Image* src, RGB_Cluster* clusters, const int num_colors) {
+	RGB_Image* dst = new RGB_Image;
+	//Make my new image
+	dst->width = src->width;
+	dst->height = src->height;
+	dst->size = src->size;
+	dst->data = new RGB_Pixel[dst->size];
+
 	for (int i = 0; i < src->size; i++) {
 		int closest = 0;
 
@@ -329,6 +336,7 @@ void map_pixels(const RGB_Image* src, RGB_Image* dst, RGB_Cluster* clusters, con
 		// Assign the pixel to the cluster center color
 		dst->data[i] = clusters[closest].center;
 	}
+	return dst;
 }
 /*
    For application of the batchk k-means algorithm to color quantization, see
@@ -490,14 +498,11 @@ int main(int argc, char* argv[])
 	const int max_iters = 500;
 	batch_kmeans(img, k, max_iters, cluster);
 
-	//Deep copy the image to output
-	RGB_Image* cluster_img = new RGB_Image;
-	cluster_img->width = img->width;
-	cluster_img->height = img->height;
-	cluster_img->size = img->size;
-	cluster_img->data = new RGB_Pixel[cluster_img->size];
-	//Now recolor the image based on the new clusters
-	map_pixels(img, cluster_img, cluster, k);
+	//Now get the image based on the new clusters
+	RGB_Image* cluster_img = map_pixels(img, cluster, k);
+	
+	
+	
 
 	/* Stop Timer*/
 	auto stop = std::chrono::high_resolution_clock::now();
