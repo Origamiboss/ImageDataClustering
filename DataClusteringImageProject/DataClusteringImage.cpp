@@ -30,7 +30,9 @@ typedef struct
 typedef struct
 {
 	int size;
-	RGB_Pixel center;
+	int SSE;
+	int* pixel_Indexes;
+	int medoid_Index;
 } RGB_Cluster;
 
 /* Mersenne Twister related constants */
@@ -277,19 +279,58 @@ void write_PPM(const RGB_Image* img, const char* filename)
 RGB_Cluster* gen_rand_centers(const RGB_Image* img, const int k) {
 	RGB_Pixel rand_pixel;
 	RGB_Cluster* cluster;
-
 	cluster = (RGB_Cluster*)malloc(k * sizeof(RGB_Cluster));
 
+	bool* used = (bool*)calloc(img->size, sizeof(bool));
 	for (int i = 0; i < k; i++) {
 		/* Make the initial guesses for the centers, m1, m2, ..., mk */
-		rand_pixel = img->data[bounded_rand(img->size)];
+		//Make sure that the same pixel is not chosen twice
+		int idx;
+		do {
+			idx = bounded_rand(img->size);
+		} while (used[idx]);
 
-		cluster[i].center = rand_pixel;
+		used[idx] = true;
+		//set the index
+		cluster[i].medoid_Index = idx;
 
-		/* Set the number of points assigned to k cluster to zero, n1, n2, ..., nk */
-		cluster[i].size = 0;
-
+		
+		
 		// cout << "\nCluster Centers: " << cluster[i].center.red << ", " << cluster[i].center.green <<", "<<  cluster[i].center.blue;
+	}
+	/* Set the number of points assigned to k cluster to zero, n1, n2, ..., nk */
+	for (int i = 0; i < k; i++) {
+		cluster[i].size = 0;
+		cluster[i].SSE = 0;
+		cluster[i].pixel_Indexes = (int*)malloc(sizeof(int) * img->size);
+	}
+	//free up used
+	free(used);
+	//Set each pixel index
+	for (int j = 0; j < img->size; j++) {
+		//Find which cluster is closer, initializing with the first cluster distance
+		int closest = 0;
+		double closestDist = DBL_MAX;
+
+		// // Loop through all clusters to find the closest
+		for (int h = 0; h < k; h++) {  // Start from 1 since 0 is already checked
+			//Get the squared distance
+			double red_diff = img->data[j].red - img->data[cluster[h].medoid_Index].red;
+			double green_diff = img->data[j].green - img->data[cluster[h].medoid_Index].green;
+			double blue_diff = img->data[j].blue - img->data[cluster[h].medoid_Index].blue;
+			double dist = red_diff * red_diff + green_diff * green_diff + blue_diff * blue_diff;
+			//store the distances
+			if (dist < closestDist) {
+				closestDist = dist;  // Update closest distance
+				closest = h;         // Update closest cluster index
+			}
+
+		}
+		//update the number of data points for this cluster
+		cluster[closest].size += 1;
+		//add the error to the cluster
+		cluster[closest].SSE += closestDist;
+		cluster[closest].pixel_Indexes[cluster[closest].size - 1] = j;
 	}
 
 	return(cluster);
@@ -326,9 +367,9 @@ RGB_Image* map_pixels(const RGB_Image* src, RGB_Cluster* clusters, const int num
 
 		for (int c = 1; c < num_colors; c++) {
 			//Get the squared distance
-			double red_diff = src->data[i].red - clusters[c].center.red;
-			double green_diff = src->data[i].green - clusters[c].center.green;
-			double blue_diff = src->data[i].blue - clusters[c].center.blue;
+			double red_diff = src->data[i].red - src->data[clusters[c].medoid_Index].red;
+			double green_diff = src->data[i].green - src->data[clusters[c].medoid_Index].green;
+			double blue_diff = src->data[i].blue - src->data[clusters[c].medoid_Index].blue;
 			double dist = red_diff * red_diff + green_diff * green_diff + blue_diff * blue_diff;
 			if (dist < closestDist) {
 				closestDist = dist;
@@ -337,7 +378,7 @@ RGB_Image* map_pixels(const RGB_Image* src, RGB_Cluster* clusters, const int num
 		}
 
 		// Assign the pixel to the cluster center color
-		dst->data[i] = clusters[closest].center;
+		dst->data[i] = src->data[clusters[closest].medoid_Index];
 	}
 	return dst;
 }
@@ -355,23 +396,31 @@ void batch_kmeans(const RGB_Image* img, const int num_colors,
 	const int sizeOfInstance = 3; // RGB has 3 dimensions
 	const double conversionThreshold = 0.001; // Convergence threshold
 
-	double oldSSE = 0;
-
 	//initialize new clusters
 	RGB_Cluster* newClusterCenters = (RGB_Cluster*)malloc(sizeof(RGB_Cluster) * num_colors);
+	//allocate this once, after that we will just reuse it
+	for (int h = 0; h < num_colors; h++) {
+		newClusterCenters[h].pixel_Indexes = (int*)malloc(sizeof(int) * img->size);
+	}
 	//We will use Recolor Image later to assign the colors to the malloc image
 
 	//i is the iteration we are on
 	for (int i = 1; i <= max_iters; i++) {
-		double SSE = 0.0;
 		//Reset an array to hold the calculated squared distances
 		
 		//Initialize the new cluster centers
-		for(int h = 0; h < num_colors; h++) {
-			newClusterCenters[h].center.red = 0.0;
-			newClusterCenters[h].center.green = 0.0;
-			newClusterCenters[h].center.blue = 0.0;
+		for (int h = 0; h < num_colors; h++) {
+			if (clusters[h].size > 0) {
+				int idx = bounded_rand(clusters[h].size);
+				newClusterCenters[h].medoid_Index = clusters[h].pixel_Indexes[idx];
+			}
+			else {
+				newClusterCenters[h].medoid_Index = clusters[h].medoid_Index;
+			}
+
 			newClusterCenters[h].size = 0;
+			newClusterCenters[h].SSE = 0;
+			
 		}
 		//Create a new Image object to hold the batch data
 		//RGB_Pixel* batch = get_rand_batch(img, batch_size);
@@ -385,9 +434,9 @@ void batch_kmeans(const RGB_Image* img, const int num_colors,
 			// // Loop through all clusters to find the closest
 			for (int h = 0; h < num_colors; h++) {  // Start from 1 since 0 is already checked
 				//Get the squared distance
-				double red_diff = img->data[j].red - clusters[h].center.red;
-				double green_diff = img->data[j].green - clusters[h].center.green;
-				double blue_diff = img->data[j].blue - clusters[h].center.blue;
+				double red_diff = img->data[j].red - img->data[newClusterCenters[h].medoid_Index].red;
+				double green_diff = img->data[j].green - img->data[newClusterCenters[h].medoid_Index].green;
+				double blue_diff = img->data[j].blue - img->data[newClusterCenters[h].medoid_Index].blue;
 				double dist = red_diff * red_diff + green_diff * green_diff + blue_diff * blue_diff;
 				//store the distances
 				if (dist < closestDist) {
@@ -398,48 +447,41 @@ void batch_kmeans(const RGB_Image* img, const int num_colors,
 			}
 
 			// Calculate the SSE
-			SSE += closestDist;
+			newClusterCenters[closest].SSE += closestDist;
 
 			//generate new clusters
-			//add the data to the cluster
-			newClusterCenters[closest].center.red += img->data[j].red;
-			newClusterCenters[closest].center.green += img->data[j].green;
-			newClusterCenters[closest].center.blue += img->data[j].blue;
-
+			// I need to turn this into a Medoid (The centermost data point in the cluster)
+			
 			//update the number of data points for this cluster
 			newClusterCenters[closest].size += 1;
+			//add the data to the cluster
+			newClusterCenters[closest].pixel_Indexes[newClusterCenters[closest].size - 1] = j;
 		}
 
 
 
 
-		//check if the convergenceThreshold is reached and kill the run if so
-		//Commented out the SSE termination condition
-		/*if (oldSSE != 0 && (oldSSE - SSE) / oldSSE < conversionThreshold) {
-			//save the iterations and Final SSE
-			std::cout << "Converged in iteration: " << i << " with SSE: " << SSE << endl;
-			free(newClusterCenters);
-			break;
-		}*/
-
-		//set the old SSE to the current SSE for the next iteration
-		oldSSE = SSE;
-		cout << "Iteration: " << i << " SSE: " << SSE << endl;
-
-		//once all of the data has been added together find the centroid for each cluster get the average
-		//Also handle singleton clusters
-		for (int i = 0; i < num_colors; i++) {
-			if (newClusterCenters[i].size > 0) {
-				newClusterCenters[i].center.blue /= newClusterCenters[i].size;
-				newClusterCenters[i].center.green /= newClusterCenters[i].size;
-				newClusterCenters[i].center.red /= newClusterCenters[i].size;
+		
+		
+		int SSE = 0;
+		//check each cluster to see if the new cluster centers are better than the old cluster centers
+		for(int j = 0; j < num_colors; j++) {
+			//If the new cluster center has a lower SSE, use it
+			if(newClusterCenters[j].SSE < clusters[j].SSE) {
+				//Keep the new cluster center
+				// cout << "Cluster " << j << " improved from " << clusters[j].SSE << " to " << newClusterCenters[j].SSE << endl;
+				clusters[j].medoid_Index = newClusterCenters[j].medoid_Index;
+				clusters[j].SSE = newClusterCenters[j].SSE;
+				clusters[j].size = newClusterCenters[j].size;
+				memcpy(clusters[j].pixel_Indexes, newClusterCenters[j].pixel_Indexes, sizeof(int) * newClusterCenters[j].size);
 			}
+			SSE += clusters[j].SSE;
 		}
 		//save the new clusters as the old
-		clusters = newClusterCenters;
+		
+		cout << "Iteration: " << i << " SSE: " << SSE << endl;
 	}
 	free(newClusterCenters);
-	std::cout << "Reached maximum iterations: " << max_iters << " with SSE: " << oldSSE << endl;
 	
 }
 
