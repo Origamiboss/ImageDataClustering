@@ -26,11 +26,13 @@ typedef struct
 	int size;
 	RGB_Pixel* data;
 } RGB_Image;
+
 typedef struct {
 	double* d1;
 	double* d2;
 	int* nearest_medoid;
 } PAM_Workspace;
+
 typedef struct
 {
 	int size;
@@ -465,6 +467,126 @@ void batch_kmedoids(const RGB_Image* img, PAM_Workspace* ws, const int num_color
 	
 }
 
+//My new function
+void OneBatchPAM(const RGB_Image* img, PAM_Workspace* ws, const int sizeOfBatch, const int num_clusters, const int max_iters, RGB_Cluster* clusters) {
+	const int sizeOfInstance = 3; // RGB has 3 slots
+	const double conversionThreshold = 0.001; // Convergence threshold
+	
+	//Now we are running the PAM algorithm on this batch to make it a OneBatchPAM
+	bool swapped = true;
+	int* batch = (int*)malloc(sizeof(int) * sizeOfBatch);
+
+	//initialize important stuff for PAM
+	int iteration = 0;
+
+	//Repeat until it doesn't swap or we hit the max iterations
+	while (swapped && iteration < max_iters)
+	{
+		
+		swapped = false;
+
+		//Get a random batch
+		for (int i = 0; i < sizeOfBatch; i++)
+			batch[i] = bounded_rand(img->size);
+
+		double bestGain = 0.0;
+		int bestCluster = -1;
+		int bestCandidate = -1;
+		
+		//Look for all possible swaps
+		for (int changingCluster = 0; changingCluster < num_clusters; changingCluster++)
+		{
+			for (int candidate = 0; candidate < sizeOfBatch; candidate++)
+			{
+				int cand_idx = batch[candidate];
+
+				if (clusters[changingCluster].medoid_Index == cand_idx)
+					continue;
+
+				double gain = 0.0;
+
+				for (int b = 0; b < sizeOfBatch; b++)
+				{
+					int idx = batch[b];
+
+					int old_m = ws->nearest_medoid[idx];
+
+					double dr = img->data[idx].red - img->data[cand_idx].red;
+					double dg = img->data[idx].green - img->data[cand_idx].green;
+					double db = img->data[idx].blue - img->data[cand_idx].blue;
+
+					double dist_io = dr * dr + dg * dg + db * db;
+
+					if (old_m == changingCluster)
+					{
+						gain += fmin(dist_io, ws->d2[idx]) - ws->d1[idx];
+					}
+					else
+					{
+						if (dist_io < ws->d1[idx])
+							gain += dist_io - ws->d1[idx];
+					}
+				}
+				// Track best swap
+				if (gain < bestGain)
+				{
+					bestGain = gain;
+					bestCluster = changingCluster;
+					bestCandidate = candidate;
+				}
+			}
+		}
+
+		// Do the best swap if it is an improvement
+		printf("Iteration %d  Gain = %f\n", iteration, bestGain);
+		if (bestGain < -conversionThreshold)
+		{
+			swapped = true;
+
+			clusters[bestCluster].medoid_Index = bestCandidate;
+
+			//Update the workspace for future iterations
+			for (int i = 0; i < img->size; i++)
+			{
+				double best = DBL_MAX;
+				double second = DBL_MAX;
+				int best_id = -1;
+
+				for (int m = 0; m < num_clusters; m++)
+				{
+					int medoid_idx = clusters[m].medoid_Index;
+
+					double dr = img->data[i].red - img->data[medoid_idx].red;
+					double dg = img->data[i].green - img->data[medoid_idx].green;
+					double db = img->data[i].blue - img->data[medoid_idx].blue;
+
+					double dist = dr * dr + dg * dg + db * db;
+
+					if (dist < best)
+					{
+						second = best;
+						best = dist;
+						best_id = m;
+					}
+					else if (dist < second)
+					{
+						second = dist;
+					}
+				}
+
+				ws->d1[i] = best;
+				ws->d2[i] = second;
+				ws->nearest_medoid[i] = best_id;
+			}
+
+			
+		}
+
+		iteration++;
+	}
+	free(batch);
+}
+
 void free_img(const RGB_Image* img) {
 	/* Free Image Data*/
 	free(img->data);
@@ -524,7 +646,8 @@ int main(int argc, char* argv[])
 	/* Execute Batch K-means*/
 	//RGB_Image* cluster_img = batch_kmeans(img, batch_size, k, INT_MAX, cluster);
 	const int max_iters = 500;
-	batch_kmedoids(img, importantPAMData, k, max_iters, cluster);
+	const int sizeOfBatch = 1000;
+	OneBatchPAM(img, importantPAMData, sizeOfBatch, k, max_iters, cluster);
 
 	//Now get the image based on the new clusters
 	RGB_Image* cluster_img = map_pixels(img, cluster, k);
