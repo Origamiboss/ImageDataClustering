@@ -40,6 +40,8 @@ typedef struct
 	double dist_to_nearest_medoid;
 	double dist_to_second_nearest_medoid;
 	int medoid_Index;
+	//This is for the k-means implementation
+	RGB_Pixel center;
 } RGB_Cluster;
 
 /* Mersenne Twister related constants */
@@ -398,6 +400,99 @@ RGB_Image* map_pixels(const RGB_Image* src, RGB_Cluster* clusters, const int num
  /* Color quantization using the batch k-means algorithm */
 
 // I have copied my k-means implementation here and have modified it to work with RGB images
+void batch_kmeans(const RGB_Image* img, const int num_colors,
+	const int max_iters, RGB_Cluster* clusters)
+{
+	const int sizeOfInstance = 3; // RGB has 3 dimensions
+	const double conversionThreshold = 0.001; // Convergence threshold
+
+	double oldSSE = 0;
+
+	//initialize new clusters
+	RGB_Cluster* newClusterCenters = (RGB_Cluster*)malloc(sizeof(RGB_Cluster) * num_colors);
+	//We will use Recolor Image later to assign the colors to the malloc image
+
+	//i is the iteration we are on
+	for (int i = 1; i <= max_iters; i++) {
+		double SSE = 0.0;
+		//Reset an array to hold the calculated squared distances
+
+		//Initialize the new cluster centers
+		for (int h = 0; h < num_colors; h++) {
+			newClusterCenters[h].center.red = 0.0;
+			newClusterCenters[h].center.green = 0.0;
+			newClusterCenters[h].center.blue = 0.0;
+			newClusterCenters[h].size = 0;
+		}
+		//Create a new Image object to hold the batch data
+		//RGB_Pixel* batch = get_rand_batch(img, batch_size);
+
+		//An Iteration
+		for (int j = 0; j < img->size; j++) {
+			//Find which cluster is closer, initializing with the first cluster distance
+			int closest = 0;
+			double closestDist = DBL_MAX;
+
+			// // Loop through all clusters to find the closest
+			for (int h = 0; h < num_colors; h++) {  // Start from 1 since 0 is already checked
+				//Get the squared distance
+				double red_diff = img->data[j].red - clusters[h].center.red;
+				double green_diff = img->data[j].green - clusters[h].center.green;
+				double blue_diff = img->data[j].blue - clusters[h].center.blue;
+				double dist = red_diff * red_diff + green_diff * green_diff + blue_diff * blue_diff;
+				//store the distances
+				if (dist < closestDist) {
+					closestDist = dist;  // Update closest distance
+					closest = h;         // Update closest cluster index
+				}
+
+			}
+
+			// Calculate the SSE
+			SSE += closestDist;
+
+			//generate new clusters
+			//add the data to the cluster
+			newClusterCenters[closest].center.red += img->data[j].red;
+			newClusterCenters[closest].center.green += img->data[j].green;
+			newClusterCenters[closest].center.blue += img->data[j].blue;
+
+			//update the number of data points for this cluster
+			newClusterCenters[closest].size += 1;
+		}
+
+
+
+
+		//check if the convergenceThreshold is reached and kill the run if so
+		//Commented out the SSE termination condition
+		/*if (oldSSE != 0 && (oldSSE - SSE) / oldSSE < conversionThreshold) {
+			//save the iterations and Final SSE
+			std::cout << "Converged in iteration: " << i << " with SSE: " << SSE << endl;
+			free(newClusterCenters);
+			break;
+		}*/
+
+		//set the old SSE to the current SSE for the next iteration
+		oldSSE = SSE;
+		cout << "Iteration: " << i << " SSE: " << SSE << endl;
+
+		//once all of the data has been added together find the centroid for each cluster get the average
+		//Also handle singleton clusters
+		for (int i = 0; i < num_colors; i++) {
+			if (newClusterCenters[i].size > 0) {
+				newClusterCenters[i].center.blue /= newClusterCenters[i].size;
+				newClusterCenters[i].center.green /= newClusterCenters[i].size;
+				newClusterCenters[i].center.red /= newClusterCenters[i].size;
+			}
+		}
+		//save the new clusters as the old
+		clusters = newClusterCenters;
+	}
+	free(newClusterCenters);
+	std::cout << "Reached maximum iterations: " << max_iters << " with SSE: " << oldSSE << endl;
+
+}
 void batch_kmedoids(const RGB_Image* img, PAM_Workspace* ws, const int num_colors, const int max_iters, RGB_Cluster* clusters)
 {
 	const int sizeOfInstance = 3; // RGB has 3 dimensions
@@ -653,7 +748,7 @@ int main(int argc, char* argv[])
 	if(type == 1)
 		OneBatchPAM(img, importantPAMData, sizeOfBatch, k, max_iters, cluster);
 	else
-		batch_kmedoids(img, importantPAMData, k, max_iters, cluster);
+		batch_kmeans(img, k, max_iters, cluster);
 
 	//Now get the image based on the new clusters
 	RGB_Image* cluster_img = map_pixels(img, cluster, k);
