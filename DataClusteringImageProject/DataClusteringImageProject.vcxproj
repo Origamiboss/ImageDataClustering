@@ -125,9 +125,6 @@
   <ItemGroup>
     <ClCompile Include="DataClusteringImage.cpp" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="4.2.03.ppm" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
