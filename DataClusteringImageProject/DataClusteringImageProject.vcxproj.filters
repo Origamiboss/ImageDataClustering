@@ -20,7 +20,28 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="4.2.03.ppm">
+    <None Include="OriganalImages\4.2.03.ppm">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="OriganalImages\4.2.04.ppm">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="OriganalImages\4.2.07.ppm">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="OriganalImages\fish.ppm">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="OriganalImages\goldhill.ppm">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="OriganalImages\kodim05.ppm">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="OriganalImages\kodim23.ppm">
+      <Filter>Resource Files</Filter>
+    </None>
+    <None Include="OriganalImages\pills.ppm">
       <Filter>Resource Files</Filter>
     </None>
   </ItemGroup>

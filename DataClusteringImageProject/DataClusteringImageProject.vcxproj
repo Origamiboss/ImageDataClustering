@@ -126,7 +126,14 @@
     <ClCompile Include="DataClusteringImage.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="4.2.03.ppm" />
+    <None Include="OriganalImages\4.2.03.ppm" />
+    <None Include="OriganalImages\4.2.04.ppm" />
+    <None Include="OriganalImages\4.2.07.ppm" />
+    <None Include="OriganalImages\fish.ppm" />
+    <None Include="OriganalImages\goldhill.ppm" />
+    <None Include="OriganalImages\kodim05.ppm" />
+    <None Include="OriganalImages\kodim23.ppm" />
+    <None Include="OriganalImages\pills.ppm" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -647,13 +647,27 @@ int main(int argc, char* argv[])
 	//RGB_Image* cluster_img = batch_kmeans(img, batch_size, k, INT_MAX, cluster);
 	const int max_iters = 500;
 	const int sizeOfBatch = 1000;
-	OneBatchPAM(img, importantPAMData, sizeOfBatch, k, max_iters, cluster);
+	cout << "Run OneBatchPAM or KMeans? (Enter 1 for OneBatchPAM, 2 for KMeans): ";
+	int type;
+	cin >> type;
+	if(type == 1)
+		OneBatchPAM(img, importantPAMData, sizeOfBatch, k, max_iters, cluster);
+	else
+		batch_kmedoids(img, importantPAMData, k, max_iters, cluster);
 
 	//Now get the image based on the new clusters
 	RGB_Image* cluster_img = map_pixels(img, cluster, k);
 	
-	
-	
+	//Now Calculate the MSE for each pixel of the new image and the original image and sum them up to get the total MSE
+	double totalMSE = 0.0;
+	for (int i = 0; i < img->size; i++) {
+		double dr = img->data[i].red - cluster_img->data[i].red;
+		double dg = img->data[i].green - cluster_img->data[i].green;
+		double db = img->data[i].blue - cluster_img->data[i].blue;
+		double mse = (dr * dr + dg * dg + db * db) / 3.0;
+		totalMSE += mse;
+	}
+	cout << "Total MSE: " << totalMSE << endl;
 
 	/* Stop Timer*/
 	auto stop = std::chrono::high_resolution_clock::now();
